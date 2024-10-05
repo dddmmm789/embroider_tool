@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import warnings
 import logging
+import argparse
 from sklearn.cluster import KMeans
 
 # Suppress known PIL warnings for PNGs with incorrect sRGB profiles
@@ -57,107 +58,33 @@ def display_image(image, title="Image"):
     plt.axis('off')
     plt.show()
 
-from PIL import Image
-import numpy as np
-from sklearn.cluster import KMeans
-
-from PIL import Image
-import numpy as np
-from sklearn.cluster import KMeans
-
 def preprocess_image(image, max_colors=10):
-    """
-    Reduces the image colors to the specified max_colors and saves both the processed image
-    and a text file with the RGB values of the colors used.
-
-    Parameters:
-    - image: Either a PIL Image object or a NumPy array.
-    - max_colors: Maximum number of colors for the reduced image.
-
-    Returns:
-    - processed_image: The PIL Image object of the processed image.
-    """
-    
     # Ensure image is a PIL Image object; convert from NumPy array if necessary
     if isinstance(image, np.ndarray):
         image = Image.fromarray(image)  # Convert NumPy array to PIL Image
     
-    # Convert image to RGB format
     image = image.convert("RGB")
     image_array = np.array(image)
 
-    # Reshape image array to a 2D array of pixels for clustering
     pixels = image_array.reshape((-1, 3))
 
-    # Use K-means clustering to reduce the number of colors
     kmeans = KMeans(n_clusters=max_colors, random_state=42).fit(pixels)
-    cluster_centers = kmeans.cluster_centers_.astype(int)  # These are the dominant colors
+    cluster_centers = kmeans.cluster_centers_.astype(int)
     labels = kmeans.labels_
 
-    # Create the new image using the reduced color palette
     processed_pixels = cluster_centers[labels].reshape(image_array.shape)
     processed_image = Image.fromarray(processed_pixels.astype('uint8'))
 
-    # Save the processed image
     processed_image.save("processed_image.png")
 
-    # Save the cluster centers (unique colors) to a text file
     with open("unique_colors.txt", "w") as f:
         for color in cluster_centers:
-            f.write(f"{tuple(color)}\n")  # Write each RGB tuple as a line
+            f.write(f"{tuple(color)}\n")
 
     print(f"Processed image saved with {len(cluster_centers)} unique colors: {cluster_centers}.")
     return processed_image, cluster_centers
-    """
-    Reduces the image colors to the specified max_colors and saves both the processed image
-    and a text file with the RGB values of the colors used.
-    
-    Parameters:
-    - image: PIL Image object to be processed.
-    - max_colors: Maximum number of colors for the reduced image.
-    
-    Returns:
-    - processed_image: The PIL Image object of the processed image.
-    """
-
-    # Convert image to RGB and numpy array format
-    image = image.convert("RGB")
-    image_array = np.array(image)
-
-    # Reshape image array to a 2D array of pixels for clustering
-    pixels = image_array.reshape((-1, 3))
-
-    # Use K-means clustering to reduce the number of colors
-    kmeans = KMeans(n_clusters=max_colors, random_state=42).fit(pixels)
-    cluster_centers = kmeans.cluster_centers_.astype(int)  # These are the dominant colors
-    labels = kmeans.labels_
-
-    # Create the new image using the reduced color palette
-    processed_pixels = cluster_centers[labels].reshape(image_array.shape)
-    processed_image = Image.fromarray(processed_pixels.astype('uint8'))
-
-    # Save the processed image
-    processed_image.save("processed_image.png")
-
-    # Save the cluster centers (unique colors) to a text file
-    with open("unique_colors.txt", "w") as f:
-        for color in cluster_centers:
-            f.write(f"{tuple(color)}\n")  # Write each RGB tuple as a line
-
-    print(f"Processed image saved with {len(cluster_centers)} unique colors: {cluster_centers}.")
-    return processed_image
 
 def save_processed_image(processed_image, original_image_path):
-    """
-    Save the processed image in the same directory as the original image.
-
-    Parameters:
-        processed_image (ndarray): The processed image array.
-        original_image_path (str): The path of the original image.
-
-    Returns:
-        None
-    """
     logging.info("Saving processed image...")
     directory, filename = os.path.split(original_image_path)
     name, ext = os.path.splitext(filename)
@@ -165,8 +92,7 @@ def save_processed_image(processed_image, original_image_path):
     processed_image_path = os.path.join(directory, processed_filename)
 
     try:
-        # Save the processed image using PIL
-        processed_image_pil = Image.fromarray(processed_image)
+        processed_image_pil = Image.fromarray(np.array(processed_image))
         processed_image_pil.save(processed_image_path)
         logging.info(f"Processed image saved as '{processed_image_path}'")
     except Exception as e:
@@ -193,9 +119,14 @@ def save_color_list(unique_colors, original_image_path):
 def main():
     logging.info("Entering main function...")
 
-    image_path = input(f"Please enter the path to your image file (default: {DEFAULT_IMAGE_PATH}): ").strip()
-    if not image_path:
-        image_path = DEFAULT_IMAGE_PATH
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Embroidery Tool")
+    parser.add_argument('--image', type=str, default=DEFAULT_IMAGE_PATH, help='Path to the image file')
+    parser.add_argument('--colors', type=int, default=10, help='Number of colors to reduce the image to')
+    args = parser.parse_args()
+
+    image_path = args.image
+    max_colors = args.colors
 
     print("Loading image...")
     logging.info("Loading image...")
@@ -209,12 +140,7 @@ def main():
     print("Displaying the original image...")
     display_image(image, title="Original Image")
 
-    print("Preprocessing the image (reducing to fewer colors)...")
-    max_colors = int(input("Enter the number of colors to reduce the image to (10, 20, 30, 100): ").strip())
-    if max_colors not in [10, 20, 30, 100]:
-        print("Invalid number of colors. Please choose 10, 20, or 30.")
-        return
-
+    print(f"Preprocessing the image (reducing to {max_colors} colors)...")
     processed_image, unique_colors = preprocess_image(image, max_colors=max_colors)
     if processed_image is None or unique_colors is None:
         return
@@ -223,7 +149,7 @@ def main():
     display_image(processed_image, title="Processed Image")
 
     print("Saving the processed image and color list...")
-    save_processed_image(processed_image, image_path)  # Save the processed image
+    save_processed_image(processed_image, image_path)
     save_color_list(unique_colors, image_path)
 
     print("Processing complete. Check the log file for more details.")
