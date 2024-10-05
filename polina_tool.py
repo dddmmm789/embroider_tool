@@ -57,50 +57,95 @@ def display_image(image, title="Image"):
     plt.axis('off')
     plt.show()
 
+from PIL import Image
+import numpy as np
+from sklearn.cluster import KMeans
+
+from PIL import Image
+import numpy as np
+from sklearn.cluster import KMeans
+
 def preprocess_image(image, max_colors=10):
     """
-    Reduce the image to a specific number of colors for simplified pattern generation.
+    Reduces the image colors to the specified max_colors and saves both the processed image
+    and a text file with the RGB values of the colors used.
 
     Parameters:
-        image (ndarray): The input image in RGB format.
-        max_colors (int): The number of colors to reduce the image to.
+    - image: Either a PIL Image object or a NumPy array.
+    - max_colors: Maximum number of colors for the reduced image.
 
     Returns:
-        ndarray: The processed image with reduced colors.
-        ndarray: The unique RGB values in the processed image.
+    - processed_image: The PIL Image object of the processed image.
     """
-    logging.info(f"Starting image preprocessing with {max_colors} colors...")
-    start_time = time.time()
+    
+    # Ensure image is a PIL Image object; convert from NumPy array if necessary
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)  # Convert NumPy array to PIL Image
+    
+    # Convert image to RGB format
+    image = image.convert("RGB")
+    image_array = np.array(image)
 
-    # Convert image to LAB color space for better color segmentation
-    lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
-    reshaped_image = lab_image.reshape((-1, 3))
+    # Reshape image array to a 2D array of pixels for clustering
+    pixels = image_array.reshape((-1, 3))
 
-    logging.info("Running k-means clustering...")
-    # Use k-means clustering to reduce the number of colors
-    try:
-        kmeans = KMeans(n_clusters=max_colors, random_state=42, n_init=10, max_iter=300, verbose=0)
-        labels = kmeans.fit_predict(reshaped_image)
-    except Exception as e:
-        logging.error(f"K-means clustering failed: {e}")
-        print(f"Error in clustering: {e}")
-        return None, None
+    # Use K-means clustering to reduce the number of colors
+    kmeans = KMeans(n_clusters=max_colors, random_state=42).fit(pixels)
+    cluster_centers = kmeans.cluster_centers_.astype(int)  # These are the dominant colors
+    labels = kmeans.labels_
 
-    logging.info("K-means clustering completed successfully.")
+    # Create the new image using the reduced color palette
+    processed_pixels = cluster_centers[labels].reshape(image_array.shape)
+    processed_image = Image.fromarray(processed_pixels.astype('uint8'))
 
-    # Reconstruct the image from the cluster labels and cluster centers
-    quantized_image = kmeans.cluster_centers_.astype("uint8")[labels]
-    quantized_image = quantized_image.reshape(image.shape)
+    # Save the processed image
+    processed_image.save("processed_image.png")
 
-    # Convert back to RGB to ensure proper color mapping
-    final_image_rgb = cv2.cvtColor(quantized_image, cv2.COLOR_LAB2RGB)
+    # Save the cluster centers (unique colors) to a text file
+    with open("unique_colors.txt", "w") as f:
+        for color in cluster_centers:
+            f.write(f"{tuple(color)}\n")  # Write each RGB tuple as a line
 
-    # Get unique RGB colors from the cluster centers
-    unique_colors = np.unique(kmeans.cluster_centers_.astype("uint8"), axis=0)
+    print(f"Processed image saved with {len(cluster_centers)} unique colors: {cluster_centers}.")
+    return processed_image, cluster_centers
+    """
+    Reduces the image colors to the specified max_colors and saves both the processed image
+    and a text file with the RGB values of the colors used.
+    
+    Parameters:
+    - image: PIL Image object to be processed.
+    - max_colors: Maximum number of colors for the reduced image.
+    
+    Returns:
+    - processed_image: The PIL Image object of the processed image.
+    """
 
-    end_time = time.time()
-    logging.info(f"Image preprocessing completed in {end_time - start_time:.2f} seconds.")
-    return final_image_rgb, unique_colors
+    # Convert image to RGB and numpy array format
+    image = image.convert("RGB")
+    image_array = np.array(image)
+
+    # Reshape image array to a 2D array of pixels for clustering
+    pixels = image_array.reshape((-1, 3))
+
+    # Use K-means clustering to reduce the number of colors
+    kmeans = KMeans(n_clusters=max_colors, random_state=42).fit(pixels)
+    cluster_centers = kmeans.cluster_centers_.astype(int)  # These are the dominant colors
+    labels = kmeans.labels_
+
+    # Create the new image using the reduced color palette
+    processed_pixels = cluster_centers[labels].reshape(image_array.shape)
+    processed_image = Image.fromarray(processed_pixels.astype('uint8'))
+
+    # Save the processed image
+    processed_image.save("processed_image.png")
+
+    # Save the cluster centers (unique colors) to a text file
+    with open("unique_colors.txt", "w") as f:
+        for color in cluster_centers:
+            f.write(f"{tuple(color)}\n")  # Write each RGB tuple as a line
+
+    print(f"Processed image saved with {len(cluster_centers)} unique colors: {cluster_centers}.")
+    return processed_image
 
 def save_processed_image(processed_image, original_image_path):
     """
